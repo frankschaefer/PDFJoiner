@@ -180,6 +180,33 @@ class BatchProcessor:
         self._log(f"Starting batch processing of {total_folders} folders...")
         self._log(f"Source file deletion: {deletion_status}")
 
+        # Phase 1: Count all PDF files across all folders
+        self._log(f"\nCounting PDF files in {total_folders} folders...")
+        total_files = 0
+        folder_file_counts = {}
+
+        for folder_name in selected_folders:
+            if self.should_stop:
+                break
+
+            folder_path = os.path.join(base_path, folder_name)
+            pdf_files = self.get_pdf_files_in_folder(folder_path)
+            folder_file_counts[folder_name] = len(pdf_files)
+            total_files += len(pdf_files)
+
+            # Update progress during counting (~10 times per second simulation)
+            self._update_progress(0, 100, f"Counting files: {total_files} PDFs found...")
+
+        self._log(f"Found {total_files} total PDF files across {total_folders} folders")
+
+        if total_files == 0:
+            self._log("No PDF files to process!")
+            self.is_running = False
+            return
+
+        # Phase 2: Process files with file-level progress tracking
+        files_processed = 0
+
         for idx, folder_name in enumerate(selected_folders):
             if self.should_stop:
                 self._log("Processing stopped by user.")
@@ -195,7 +222,6 @@ class BatchProcessor:
             folder_path = os.path.join(base_path, folder_name)
             self.current_folder = folder_name
 
-            self._update_progress(idx, total_folders, f"Processing: {folder_name}")
             self._log(f"\n[{idx + 1}/{total_folders}] Processing folder: {folder_name}")
 
             # Get PDF files
@@ -207,6 +233,11 @@ class BatchProcessor:
 
             self._log(f"  Found {len(pdf_files)} PDF files")
 
+            # Update progress before starting this folder
+            progress_percent = (files_processed / total_files) * 100 if total_files > 0 else 0
+            self._update_progress(files_processed, total_files,
+                                f"Processing file {files_processed + 1}/{total_files} in {folder_name}")
+
             # Sort by date (newest first)
             sorted_files = DateExtractor.sort_files_by_date(pdf_files, newest_first=True)
 
@@ -217,10 +248,15 @@ class BatchProcessor:
             self._log(f"  Output: {output_filename}")
             self._log(f"  Merging PDFs (sorted by date, newest first)...")
 
-            # Merge PDFs
+            # Merge PDFs with progress updates
             merger = PDFMerger()
             success = merger.merge_pdfs(sorted_files, output_path)
             merger.close()
+
+            # Update progress after merging files in this folder
+            files_processed += len(sorted_files)
+            self._update_progress(files_processed, total_files,
+                                f"Processed {files_processed}/{total_files} files")
 
             if success and self.verify_pdf_file(output_path):
                 self._log(f"  ✓ Successfully merged {len(sorted_files)} PDFs")
@@ -247,7 +283,7 @@ class BatchProcessor:
                     except Exception:
                         pass
 
-        self._update_progress(total_folders, total_folders, "Processing complete")
+        self._update_progress(total_files, total_files, "Processing complete")
         self._log(f"\nBatch processing completed!")
         self.is_running = False
 

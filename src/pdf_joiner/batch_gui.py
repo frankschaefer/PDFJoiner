@@ -452,8 +452,8 @@ class BatchPDFJoinerApp(ctk.CTk):
 
             self.time_label.configure(text=f"Elapsed: {elapsed_str} | Estimated: {remaining_str}")
 
-        # Schedule next update
-        self.after(1000, self._update_time)
+        # Schedule next update (~2 times per second)
+        self.after(500, self._update_time)
 
     def _on_processing_complete(self):
         """Handle processing completion."""

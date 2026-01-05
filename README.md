@@ -2,7 +2,7 @@
 
 A professional Python desktop application for batch processing and merging PDF files from multiple folders. Features a modern GUI built with CustomTkinter.
 
-![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -153,6 +153,15 @@ self.base_path = "/your/default/path"
 Or use the "📁 Select Start Folder" button to choose a different directory at runtime.
 
 ## Version History
+
+### v1.0.3 (2026-01-05)
+- Enhanced progress bar with file-level tracking for improved visibility
+- Added file counting phase before processing with real-time updates
+- Implemented high-frequency progress updates during PDF merging
+- Progress bar now updates based on individual files rather than folders
+- Increased time estimation update frequency to ~2 times per second (500ms intervals)
+- Improved user feedback with detailed file processing counts
+- Better progress visibility for folders with many PDFs
 
 ### v1.0.2 (2026-01-05)
 - Added configurable source file deletion option
