@@ -214,6 +214,18 @@ class BatchPDFJoinerApp(ctk.CTk):
         )
         self.stop_button.grid(row=0, column=2, padx=5)
 
+        self.quit_button = ctk.CTkButton(
+            button_frame,
+            text="✕ Exit Application",
+            command=self._quit_application,
+            width=150,
+            height=40,
+            fg_color="#6b7280",
+            hover_color="#4b5563",
+            font=ctk.CTkFont(size=14)
+        )
+        self.quit_button.grid(row=0, column=3, padx=5)
+
     def _create_status_bar(self):
         """Create status bar with time information."""
         status_frame = ctk.CTkFrame(self, height=30)
@@ -307,6 +319,30 @@ class BatchPDFJoinerApp(ctk.CTk):
                 selected.append(folder_name)
         return selected
 
+    def _set_button_states_idle(self):
+        """Set button states for idle (ready to start)."""
+        self.start_button.configure(state="normal")
+        self.pause_button.configure(state="disabled", text="⏸ Pause")
+        self.stop_button.configure(state="disabled")
+        self.browse_button.configure(state="normal")
+        self.quit_button.configure(state="normal")
+
+    def _set_button_states_processing(self):
+        """Set button states for active processing."""
+        self.start_button.configure(state="disabled")
+        self.pause_button.configure(state="normal", text="⏸ Pause")
+        self.stop_button.configure(state="normal")
+        self.browse_button.configure(state="disabled")
+        self.quit_button.configure(state="disabled")
+
+    def _set_button_states_paused(self):
+        """Set button states for paused state."""
+        self.start_button.configure(state="disabled")
+        self.pause_button.configure(state="normal", text="▶ Resume")
+        self.stop_button.configure(state="normal")
+        self.browse_button.configure(state="disabled")
+        self.quit_button.configure(state="disabled")
+
     def _start_processing(self):
         """Start the batch processing."""
         self.selected_folders = self._get_selected_folders()
@@ -322,10 +358,8 @@ class BatchPDFJoinerApp(ctk.CTk):
         self.progress_bar.set(0)
         self.start_time = time.time()
 
-        # Update button states
-        self.start_button.configure(state="disabled")
-        self.pause_button.configure(state="normal", text="⏸ Pause")
-        self.stop_button.configure(state="normal")
+        # Update button states to processing
+        self._set_button_states_processing()
 
         # Disable folder selection
         for checkbox in self.folder_scroll.winfo_children():
@@ -347,11 +381,11 @@ class BatchPDFJoinerApp(ctk.CTk):
         """Pause or resume processing."""
         if self.processor.is_paused:
             self.processor.resume()
-            self.pause_button.configure(text="⏸ Pause")
+            self._set_button_states_processing()
             self._log_message("Processing resumed")
         else:
             self.processor.pause()
-            self.pause_button.configure(text="▶ Resume")
+            self._set_button_states_paused()
             self._log_message("Processing paused")
 
     def _stop_processing(self):
@@ -408,10 +442,8 @@ class BatchPDFJoinerApp(ctk.CTk):
 
     def _on_processing_complete(self):
         """Handle processing completion."""
-        # Update button states
-        self.start_button.configure(state="normal")
-        self.pause_button.configure(state="disabled", text="⏸ Pause")
-        self.stop_button.configure(state="disabled")
+        # Update button states to idle
+        self._set_button_states_idle()
 
         # Re-enable folder selection
         for checkbox in self.folder_scroll.winfo_children():
@@ -427,14 +459,25 @@ class BatchPDFJoinerApp(ctk.CTk):
             f"Batch processing completed!\nTotal time: {elapsed_str}"
         )
 
-    def on_closing(self):
-        """Clean up before closing."""
+    def _quit_application(self):
+        """Quit the application with confirmation if processing."""
         if self.processor.is_running:
-            if messagebox.askyesno("Confirm Exit", "Processing is still running. Do you want to stop and exit?"):
+            if messagebox.askyesno(
+                "Confirm Exit",
+                "Processing is currently running. Do you want to stop and exit?"
+            ):
                 self.processor.stop()
                 self.destroy()
         else:
-            self.destroy()
+            if messagebox.askyesno(
+                "Confirm Exit",
+                "Are you sure you want to exit the application?"
+            ):
+                self.destroy()
+
+    def on_closing(self):
+        """Clean up before closing (window close button)."""
+        self._quit_application()
 
 
 def run_batch_app():
