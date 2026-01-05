@@ -83,6 +83,19 @@ class BatchPDFJoinerApp(ctk.CTk):
         )
         version_label.grid(row=1, column=0, sticky="w")
 
+        # Help button
+        help_button = ctk.CTkButton(
+            header_frame,
+            text="❓ Help",
+            command=self._show_help,
+            width=100,
+            height=32,
+            font=ctk.CTkFont(size=13),
+            fg_color="#059669",
+            hover_color="#047857"
+        )
+        help_button.grid(row=0, column=1, rowspan=2, padx=(10, 0))
+
     def _create_folder_selection(self):
         """Create folder selection area."""
         folder_frame = ctk.CTkFrame(self)
@@ -380,6 +393,61 @@ class BatchPDFJoinerApp(ctk.CTk):
             "original": "(Original - no compression)"
         }
         self.quality_desc_label.configure(text=descriptions.get(quality, ""))
+
+    def _show_help(self):
+        """Display help documentation in a new window."""
+        import webbrowser
+        import os
+
+        # Get path to HELP.md
+        help_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "HELP.md")
+
+        # Create help window
+        help_window = ctk.CTkToplevel(self)
+        help_window.title("PDF Joiner - Help")
+        help_window.geometry("800x600")
+
+        # Make window modal
+        help_window.transient(self)
+        help_window.grab_set()
+
+        # Create scrollable text widget
+        help_frame = ctk.CTkFrame(help_window)
+        help_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        help_frame.grid_rowconfigure(0, weight=1)
+        help_frame.grid_columnconfigure(0, weight=1)
+
+        help_text = ctk.CTkTextbox(help_frame, wrap="word", font=ctk.CTkFont(size=12))
+        help_text.grid(row=0, column=0, sticky="nsew")
+
+        # Load help content
+        try:
+            if os.path.exists(help_file):
+                with open(help_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                help_text.insert("1.0", content)
+            else:
+                help_text.insert("1.0", "Help file not found. Please see README.md for documentation.")
+        except Exception as e:
+            help_text.insert("1.0", f"Error loading help file: {e}\n\nPlease see README.md for documentation.")
+
+        help_text.configure(state="disabled")
+
+        # Close button
+        close_button = ctk.CTkButton(
+            help_frame,
+            text="Close",
+            command=help_window.destroy,
+            width=100,
+            height=32
+        )
+        close_button.grid(row=1, column=0, pady=(10, 0))
+
+        # Center window
+        help_window.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - help_window.winfo_width()) // 2
+        y = self.winfo_y() + (self.winfo_height() - help_window.winfo_height()) // 2
+        help_window.geometry(f"+{x}+{y}")
 
     def _set_button_states_idle(self):
         """Set button states for idle (ready to start)."""
