@@ -138,6 +138,17 @@ class BatchPDFJoinerApp(ctk.CTk):
 
         self.folder_checkboxes = {}
 
+        # Delete source files option
+        self.delete_source_var = ctk.BooleanVar(value=True)
+        self.delete_checkbox = ctk.CTkCheckBox(
+            folder_frame,
+            text="Remove source files after successful merge (recommended)",
+            variable=self.delete_source_var,
+            font=ctk.CTkFont(size=12),
+            text_color=("gray10", "gray90")
+        )
+        self.delete_checkbox.grid(row=4, column=0, padx=10, pady=(5, 10), sticky="w")
+
     def _create_log_frame(self):
         """Create log output frame."""
         log_frame = ctk.CTkFrame(self)
@@ -361,15 +372,19 @@ class BatchPDFJoinerApp(ctk.CTk):
         # Update button states to processing
         self._set_button_states_processing()
 
-        # Disable folder selection
+        # Disable folder selection and delete checkbox
         for checkbox in self.folder_scroll.winfo_children():
             if isinstance(checkbox, ctk.CTkCheckBox):
                 checkbox.configure(state="disabled")
+        self.delete_checkbox.configure(state="disabled")
+
+        # Get deletion preference
+        delete_source = self.delete_source_var.get()
 
         # Start processing in thread
         self.processing_thread = threading.Thread(
             target=self.processor.process_folders,
-            args=(self.selected_folders, self.base_path),
+            args=(self.selected_folders, self.base_path, delete_source),
             daemon=True
         )
         self.processing_thread.start()
@@ -445,10 +460,11 @@ class BatchPDFJoinerApp(ctk.CTk):
         # Update button states to idle
         self._set_button_states_idle()
 
-        # Re-enable folder selection
+        # Re-enable folder selection and delete checkbox
         for checkbox in self.folder_scroll.winfo_children():
             if isinstance(checkbox, ctk.CTkCheckBox):
                 checkbox.configure(state="normal")
+        self.delete_checkbox.configure(state="normal")
 
         # Show completion message
         elapsed = time.time() - self.start_time if self.start_time else 0

@@ -163,19 +163,22 @@ class BatchProcessor:
         except Exception:
             return False
 
-    def process_folders(self, selected_folders: List[str], base_path: str):
+    def process_folders(self, selected_folders: List[str], base_path: str, delete_source: bool = True):
         """
         Process selected folders and merge PDFs.
 
         Args:
             selected_folders: List of folder names to process
             base_path: Base directory path
+            delete_source: Whether to delete source PDFs after successful merge (default: True)
         """
         self.is_running = True
         self.should_stop = False
 
         total_folders = len(selected_folders)
+        deletion_status = "enabled" if delete_source else "disabled"
         self._log(f"Starting batch processing of {total_folders} folders...")
+        self._log(f"Source file deletion: {deletion_status}")
 
         for idx, folder_name in enumerate(selected_folders):
             if self.should_stop:
@@ -222,16 +225,19 @@ class BatchProcessor:
             if success and self.verify_pdf_file(output_path):
                 self._log(f"  ✓ Successfully merged {len(sorted_files)} PDFs")
 
-                # Delete source files
-                deleted_count = 0
-                for pdf_file in sorted_files:
-                    try:
-                        os.remove(pdf_file)
-                        deleted_count += 1
-                    except Exception as e:
-                        self._log(f"  Warning: Could not delete {os.path.basename(pdf_file)}: {e}")
+                # Delete source files if requested
+                if delete_source:
+                    deleted_count = 0
+                    for pdf_file in sorted_files:
+                        try:
+                            os.remove(pdf_file)
+                            deleted_count += 1
+                        except Exception as e:
+                            self._log(f"  Warning: Could not delete {os.path.basename(pdf_file)}: {e}")
 
-                self._log(f"  ✓ Deleted {deleted_count} source PDF files")
+                    self._log(f"  ✓ Removed {deleted_count} source PDF files")
+                else:
+                    self._log(f"  ℹ Source files retained ({len(sorted_files)} PDFs preserved)")
             else:
                 self._log(f"  ✗ Failed to merge PDFs in {folder_name}")
                 # Delete failed output file if it exists

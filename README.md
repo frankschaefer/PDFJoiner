@@ -2,7 +2,7 @@
 
 A professional Python desktop application for batch processing and merging PDF files from multiple folders. Features a modern GUI built with CustomTkinter.
 
-![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -153,6 +153,14 @@ self.base_path = "/your/default/path"
 Or use the "📁 Select Start Folder" button to choose a different directory at runtime.
 
 ## Version History
+
+### v1.0.2 (2026-01-05)
+- Added configurable source file deletion option
+- New checkbox: "Remove source files after successful merge (recommended)"
+- Users can now choose to preserve original PDFs after merging
+- Enhanced logging shows deletion status during processing
+- Added comprehensive unit tests for batch processing functionality
+- Improved file deletion safety and control
 
 ### v1.0.1 (2026-01-05)
 - Added professional "Exit Application" button with confirmation dialogs
