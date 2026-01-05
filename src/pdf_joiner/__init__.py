@@ -2,4 +2,4 @@
 
 __version__ = "1.0.6"
 __release_date__ = "2026-01-05"
-__author__ = "PDF Joiner Team"
+__author__ = "Frank Schäfer"

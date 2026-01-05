@@ -218,9 +218,9 @@ self.base_path = "/your/default/path"
 
 ## Version Information
 
-**Current Version**: 1.0.5
+**Current Version**: 1.0.6
 **Release Date**: January 5, 2026
-**Author**: PDF Joiner Team
+**Author**: Frank Schäfer
 
 ### What's New in v1.0.5
 
@@ -243,7 +243,7 @@ See README.md for complete version history.
 
 ### Contact
 
-For questions, bug reports, or feature requests, please visit the GitHub repository or contact the PDF Joiner Team.
+For questions, bug reports, or feature requests, please visit the GitHub repository or contact Frank Schäfer.
 
 ---
 

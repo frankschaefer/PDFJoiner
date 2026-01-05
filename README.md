@@ -222,7 +222,7 @@ MIT License - See LICENSE file for details
 
 ## Author
 
-PDF Joiner Team
+Frank Schäfer
 
 ## Support
 
