@@ -1,6 +1,7 @@
 """Batch processing of PDF folders."""
 
 import os
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import List, Callable, Optional
@@ -93,21 +94,44 @@ class BatchProcessor:
             self._log(f"Error reading directory: {e}")
             return []
 
+    def _is_joined_pdf(self, filename: str) -> bool:
+        """
+        Check if a PDF filename matches the joined PDF pattern.
+        Pattern: <anything>_YYYY-MM-DD_HH-MM-SS.pdf
+
+        Args:
+            filename: Name of the PDF file
+
+        Returns:
+            True if filename matches joined PDF pattern
+        """
+        # Pattern: ends with _YYYY-MM-DD_HH-MM-SS.pdf
+        pattern = r'.*_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.pdf$'
+        return bool(re.match(pattern, filename, re.IGNORECASE))
+
     def get_pdf_files_in_folder(self, folder_path: str) -> List[str]:
         """
-        Get all PDF files in a folder.
+        Get all PDF files in a folder, excluding previously joined PDFs.
 
         Args:
             folder_path: Path to the folder
 
         Returns:
-            List of PDF file paths
+            List of PDF file paths (excluding joined PDFs)
         """
         pdf_files = []
+        skipped_count = 0
         try:
             for file in os.listdir(folder_path):
                 if file.lower().endswith('.pdf'):
+                    # Skip previously joined PDFs
+                    if self._is_joined_pdf(file):
+                        skipped_count += 1
+                        continue
                     pdf_files.append(os.path.join(folder_path, file))
+
+            if skipped_count > 0:
+                self._log(f"  Skipped {skipped_count} previously joined PDF(s)")
         except Exception as e:
             self._log(f"Error reading folder {folder_path}: {e}")
 

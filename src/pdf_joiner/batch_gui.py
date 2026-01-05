@@ -145,7 +145,7 @@ class BatchPDFJoinerApp(ctk.CTk):
         options_frame.grid_columnconfigure(0, weight=1)
 
         # Delete source files option
-        self.delete_source_var = ctk.BooleanVar(value=True)
+        self.delete_source_var = ctk.BooleanVar(value=False)
         self.delete_checkbox = ctk.CTkCheckBox(
             options_frame,
             text="Remove source files after successful merge (recommended)",
