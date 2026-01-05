@@ -2,7 +2,7 @@
 
 A professional Python desktop application for batch processing and merging PDF files from multiple folders. Features a modern GUI built with CustomTkinter.
 
-![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -153,6 +153,17 @@ self.base_path = "/your/default/path"
 Or use the "📁 Select Start Folder" button to choose a different directory at runtime.
 
 ## Version History
+
+### v1.0.4 (2026-01-05)
+- Added configurable image quality/compression settings
+- New quality dropdown with 4 presets: High, Medium, Low, Original
+- Intelligent image compression reduces PDF file sizes significantly
+- Medium quality (75% JPEG, 80% scale) now default for balanced output
+- Low quality option (50% JPEG, 60% scale) for maximum size reduction
+- High quality option (95% JPEG, 100% scale) preserves near-original quality
+- Original option disables compression entirely
+- Quality setting is disabled during processing for safety
+- Enhanced logging shows selected quality level during processing
 
 ### v1.0.3 (2026-01-05)
 - Enhanced progress bar with file-level tracking for improved visibility

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import List
 from .batch_processor import BatchProcessor
+from .pdf_merger import PDFMerger
 from . import __version__, __release_date__, __author__
 
 
@@ -138,16 +139,55 @@ class BatchPDFJoinerApp(ctk.CTk):
 
         self.folder_checkboxes = {}
 
+        # Options frame for delete and quality settings
+        options_frame = ctk.CTkFrame(folder_frame, fg_color="transparent")
+        options_frame.grid(row=4, column=0, padx=10, pady=(5, 10), sticky="ew")
+        options_frame.grid_columnconfigure(0, weight=1)
+
         # Delete source files option
         self.delete_source_var = ctk.BooleanVar(value=True)
         self.delete_checkbox = ctk.CTkCheckBox(
-            folder_frame,
+            options_frame,
             text="Remove source files after successful merge (recommended)",
             variable=self.delete_source_var,
             font=ctk.CTkFont(size=12),
             text_color=("gray10", "gray90")
         )
-        self.delete_checkbox.grid(row=4, column=0, padx=10, pady=(5, 10), sticky="w")
+        self.delete_checkbox.grid(row=0, column=0, padx=0, pady=(0, 5), sticky="w")
+
+        # Image quality selection
+        quality_row = ctk.CTkFrame(options_frame, fg_color="transparent")
+        quality_row.grid(row=1, column=0, padx=0, pady=(0, 0), sticky="w")
+
+        ctk.CTkLabel(
+            quality_row,
+            text="Image Quality:",
+            font=ctk.CTkFont(size=12),
+            text_color=("gray10", "gray90")
+        ).grid(row=0, column=0, padx=(0, 10), sticky="w")
+
+        self.quality_var = ctk.StringVar(value="medium")
+        self.quality_dropdown = ctk.CTkOptionMenu(
+            quality_row,
+            variable=self.quality_var,
+            values=["high", "medium", "low", "original"],
+            width=180,
+            font=ctk.CTkFont(size=12),
+            dropdown_font=ctk.CTkFont(size=11)
+        )
+        self.quality_dropdown.grid(row=0, column=1, padx=0, sticky="w")
+
+        # Quality description label
+        self.quality_desc_label = ctk.CTkLabel(
+            quality_row,
+            text="(Medium Quality - balanced)",
+            font=ctk.CTkFont(size=10),
+            text_color="gray"
+        )
+        self.quality_desc_label.grid(row=0, column=2, padx=(10, 0), sticky="w")
+
+        # Update description when quality changes
+        self.quality_var.trace_add("write", self._update_quality_description)
 
     def _create_log_frame(self):
         """Create log output frame."""
@@ -330,6 +370,17 @@ class BatchPDFJoinerApp(ctk.CTk):
                 selected.append(folder_name)
         return selected
 
+    def _update_quality_description(self, *args):
+        """Update quality description label based on selected quality."""
+        quality = self.quality_var.get()
+        descriptions = {
+            "high": "(High Quality - larger file size)",
+            "medium": "(Medium Quality - balanced)",
+            "low": "(Low Quality - smaller file size)",
+            "original": "(Original - no compression)"
+        }
+        self.quality_desc_label.configure(text=descriptions.get(quality, ""))
+
     def _set_button_states_idle(self):
         """Set button states for idle (ready to start)."""
         self.start_button.configure(state="normal")
@@ -337,6 +388,7 @@ class BatchPDFJoinerApp(ctk.CTk):
         self.stop_button.configure(state="disabled")
         self.browse_button.configure(state="normal")
         self.quit_button.configure(state="normal")
+        self.quality_dropdown.configure(state="normal")
 
     def _set_button_states_processing(self):
         """Set button states for active processing."""
@@ -345,6 +397,7 @@ class BatchPDFJoinerApp(ctk.CTk):
         self.stop_button.configure(state="normal")
         self.browse_button.configure(state="disabled")
         self.quit_button.configure(state="disabled")
+        self.quality_dropdown.configure(state="disabled")
 
     def _set_button_states_paused(self):
         """Set button states for paused state."""
@@ -353,6 +406,7 @@ class BatchPDFJoinerApp(ctk.CTk):
         self.stop_button.configure(state="normal")
         self.browse_button.configure(state="disabled")
         self.quit_button.configure(state="disabled")
+        self.quality_dropdown.configure(state="disabled")
 
     def _start_processing(self):
         """Start the batch processing."""
@@ -378,13 +432,14 @@ class BatchPDFJoinerApp(ctk.CTk):
                 checkbox.configure(state="disabled")
         self.delete_checkbox.configure(state="disabled")
 
-        # Get deletion preference
+        # Get deletion preference and quality setting
         delete_source = self.delete_source_var.get()
+        quality = self.quality_var.get()
 
         # Start processing in thread
         self.processing_thread = threading.Thread(
             target=self.processor.process_folders,
-            args=(self.selected_folders, self.base_path, delete_source),
+            args=(self.selected_folders, self.base_path, delete_source, quality),
             daemon=True
         )
         self.processing_thread.start()

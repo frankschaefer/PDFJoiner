@@ -163,7 +163,7 @@ class BatchProcessor:
         except Exception:
             return False
 
-    def process_folders(self, selected_folders: List[str], base_path: str, delete_source: bool = True):
+    def process_folders(self, selected_folders: List[str], base_path: str, delete_source: bool = True, quality: str = "medium"):
         """
         Process selected folders and merge PDFs.
 
@@ -171,6 +171,7 @@ class BatchProcessor:
             selected_folders: List of folder names to process
             base_path: Base directory path
             delete_source: Whether to delete source PDFs after successful merge (default: True)
+            quality: Image quality preset - "high", "medium", "low", or "original" (default: "medium")
         """
         self.is_running = True
         self.should_stop = False
@@ -179,6 +180,7 @@ class BatchProcessor:
         deletion_status = "enabled" if delete_source else "disabled"
         self._log(f"Starting batch processing of {total_folders} folders...")
         self._log(f"Source file deletion: {deletion_status}")
+        self._log(f"Image quality: {quality}")
 
         # Phase 1: Count all PDF files across all folders
         self._log(f"\nCounting PDF files in {total_folders} folders...")
@@ -248,8 +250,8 @@ class BatchProcessor:
             self._log(f"  Output: {output_filename}")
             self._log(f"  Merging PDFs (sorted by date, newest first)...")
 
-            # Merge PDFs with progress updates
-            merger = PDFMerger()
+            # Merge PDFs with progress updates and quality setting
+            merger = PDFMerger(quality=quality)
             success = merger.merge_pdfs(sorted_files, output_path)
             merger.close()
 
