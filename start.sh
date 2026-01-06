@@ -3,7 +3,7 @@
 # This script activates the virtual environment and starts the application
 
 echo "===================================="
-echo "PDF Batch Joiner v1.3.2"
+echo "PDF Batch Joiner v1.3.3"
 echo "===================================="
 echo ""
 

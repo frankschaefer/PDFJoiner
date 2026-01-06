@@ -3,7 +3,7 @@
 import os
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Callable, Optional
 import threading
 import time
@@ -24,9 +24,11 @@ class BatchProcessor:
         self.progress_callback: Optional[Callable] = None
         self.log_callback: Optional[Callable] = None
         self.last_progress_update = 0
-        self.progress_update_interval = 0.1  # Update progress at most 10 times per second
+        self.progress_update_interval = 2.0  # Update progress at most every 2 seconds
         self.total_input_size = 0
         self.total_output_size = 0
+        self.start_time = None
+        self.total_files_to_process = 0
 
     def set_progress_callback(self, callback: Callable):
         """Set callback for progress updates."""
@@ -59,7 +61,7 @@ class BatchProcessor:
 
     def _update_progress(self, current: int, total: int, message: str = "", force: bool = False):
         """
-        Update progress with throttling to avoid UI flooding.
+        Update progress with throttling and estimated completion time.
 
         Args:
             current: Current progress value
@@ -71,8 +73,29 @@ class BatchProcessor:
 
         # Only update if enough time has passed or force is True
         if force or (current_time - self.last_progress_update) >= self.progress_update_interval:
+            # Calculate estimated time remaining
+            eta_message = message
+            if self.start_time and current > 0 and total > 0:
+                elapsed = current_time - self.start_time
+                rate = current / elapsed
+                remaining = (total - current) / rate if rate > 0 else 0
+
+                # Calculate completion time
+                completion_time = datetime.now() + timedelta(seconds=remaining)
+                completion_str = completion_time.strftime("%H:%M:%S")
+
+                # Format remaining time
+                if remaining < 60:
+                    eta_str = f"{remaining:.0f}s"
+                elif remaining < 3600:
+                    eta_str = f"{remaining/60:.1f}min"
+                else:
+                    eta_str = f"{remaining/3600:.1f}h"
+
+                eta_message = f"{message} | ETA: {eta_str} (fertig um {completion_str})"
+
             if self.progress_callback:
-                self.progress_callback(current, total, message)
+                self.progress_callback(current, total, eta_message)
             self.last_progress_update = current_time
 
     def validate_and_fix_path(self, base_path: str) -> Optional[str]:
@@ -330,6 +353,10 @@ class BatchProcessor:
             self.is_running = False
             return
 
+        # Initialize timing for ETA calculation
+        self.start_time = time.time()
+        self.total_files_to_process = total_files
+
         # Phase 2: Process files with file-level progress tracking
         files_processed = 0
 
@@ -372,11 +399,21 @@ class BatchProcessor:
             if enable_ocr and ocr_processor:
                 self._log(f"  Running OCR on {len(sorted_files)} PDFs...")
 
+                # Create OCR progress callback
+                def ocr_progress(current, total, filename):
+                    ocr_file_progress = files_processed + current
+                    self._update_progress(
+                        ocr_file_progress,
+                        total_files,
+                        f"OCR on file {ocr_file_progress}/{total_files}: {filename}"
+                    )
+
                 ocr_success, ocr_failed, ocr_errors = ocr_processor.batch_process(
                     sorted_files,
                     optimize_level=0,  # No optimization during OCR (we'll compress during merge)
                     skip_text=True,  # Skip pages that already have text
-                    inplace=True  # Replace original files with OCR versions
+                    inplace=True,  # Replace original files with OCR versions
+                    progress_callback=ocr_progress  # Add progress callback
                 )
 
                 if ocr_success > 0:

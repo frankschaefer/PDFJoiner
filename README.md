@@ -2,7 +2,7 @@
 
 A professional Python desktop application for batch processing and merging PDF files from multiple folders. Features a modern GUI built with CustomTkinter.
 
-![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.3-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -168,6 +168,19 @@ self.base_path = "/your/default/path"
 Or use the "📁 Select Start Folder" button to choose a different directory at runtime.
 
 ## Version History
+
+### v1.3.3 (2026-01-06) - Enhanced Progress Tracking for OCR
+- **IMPROVEMENT**: Much more frequent progress updates during OCR processing
+  - Changed update interval from 0.1s to 2.0s (better for slow OCR operations)
+  - Added progress callback to OCR batch processing
+  - Progress updates now show OCR file-by-file progress
+- **NEW**: Estimated completion time with clock time
+  - Shows remaining time (e.g., "45s", "2.3min", "1.5h")
+  - Shows completion time (e.g., "fertig um 14:35:22")
+  - Real-time ETA calculation based on processing rate
+- **Impact**: Much better UX during long OCR operations
+  - Previous version: rare updates, unclear progress during OCR
+  - New version: updates every 2 seconds or after each file, with completion time
 
 ### v1.3.2 (2026-01-06) - OCR Path Detection Fix
 - **FIX**: OCRmyPDF detection now works with Homebrew installations
