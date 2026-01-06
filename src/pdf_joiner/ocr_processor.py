@@ -29,6 +29,30 @@ class OCRProcessor:
         if self.log_callback:
             self.log_callback(message)
 
+    def _get_ocrmypdf_path(self) -> Optional[str]:
+        """
+        Get the path to ocrmypdf executable.
+
+        Returns:
+            Path to ocrmypdf or None if not found
+        """
+        # Check standard PATH first
+        standard_path = shutil.which('ocrmypdf')
+        if standard_path:
+            return standard_path
+
+        # Check common Homebrew paths (macOS)
+        homebrew_paths = [
+            '/opt/homebrew/bin/ocrmypdf',  # Apple Silicon
+            '/usr/local/bin/ocrmypdf',      # Intel Mac
+        ]
+
+        for path in homebrew_paths:
+            if os.path.exists(path):
+                return path
+
+        return None
+
     def is_ocrmypdf_available(self) -> bool:
         """
         Check if ocrmypdf is installed and available.
@@ -36,7 +60,7 @@ class OCRProcessor:
         Returns:
             True if ocrmypdf is available
         """
-        return shutil.which('ocrmypdf') is not None
+        return self._get_ocrmypdf_path() is not None
 
     def process_pdf(
         self,
@@ -74,9 +98,14 @@ class OCRProcessor:
             self._log(f"  ⚠ Große Datei ({file_size_mb:.1f} MB) - OCR kann lange dauern")
 
         try:
+            # Get ocrmypdf path
+            ocrmypdf_path = self._get_ocrmypdf_path()
+            if not ocrmypdf_path:
+                return False, "OCRmyPDF ist nicht installiert. Bitte installieren: brew install ocrmypdf"
+
             # Build ocrmypdf command
             cmd = [
-                'ocrmypdf',
+                ocrmypdf_path,
                 '-l', self.language,
                 '--optimize', str(optimize_level),
             ]
@@ -234,8 +263,21 @@ def check_ocr_installation() -> Tuple[bool, str]:
     Returns:
         Tuple of (is_installed: bool, message: str)
     """
+    # Helper to find ocrmypdf
+    def find_ocrmypdf():
+        # Check standard PATH
+        path = shutil.which('ocrmypdf')
+        if path:
+            return path
+        # Check Homebrew paths
+        for homebrew_path in ['/opt/homebrew/bin/ocrmypdf', '/usr/local/bin/ocrmypdf']:
+            if os.path.exists(homebrew_path):
+                return homebrew_path
+        return None
+
     # Check ocrmypdf
-    if not shutil.which('ocrmypdf'):
+    ocrmypdf_path = find_ocrmypdf()
+    if not ocrmypdf_path:
         return False, "OCRmyPDF nicht gefunden. Installation: brew install ocrmypdf"
 
     # Check tesseract
@@ -245,7 +287,7 @@ def check_ocr_installation() -> Tuple[bool, str]:
     # Try to get version
     try:
         result = subprocess.run(
-            ['ocrmypdf', '--version'],
+            [ocrmypdf_path, '--version'],
             capture_output=True,
             text=True,
             timeout=5

@@ -2,7 +2,7 @@
 
 A professional Python desktop application for batch processing and merging PDF files from multiple folders. Features a modern GUI built with CustomTkinter.
 
-![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -168,6 +168,16 @@ self.base_path = "/your/default/path"
 Or use the "📁 Select Start Folder" button to choose a different directory at runtime.
 
 ## Version History
+
+### v1.3.2 (2026-01-06) - OCR Path Detection Fix
+- **FIX**: OCRmyPDF detection now works with Homebrew installations
+  - Added Homebrew path detection for Apple Silicon (`/opt/homebrew/bin/ocrmypdf`)
+  - Added Homebrew path detection for Intel Macs (`/usr/local/bin/ocrmypdf`)
+  - Fixed `is_ocrmypdf_available()` to check additional paths beyond standard PATH
+  - Fixed `check_ocr_installation()` to use correct ocrmypdf path
+- **Impact**: OCR now works correctly on macOS even when Homebrew binaries aren't in PATH
+  - Previous version showed "OCRmyPDF nicht verfügbar" despite being installed
+  - Fixed version correctly detects OCRmyPDF 16.13.0 via Homebrew
 
 ### v1.3.1 (2026-01-06) - Critical Compression Fix
 - **CRITICAL FIX**: Image compression now works correctly
