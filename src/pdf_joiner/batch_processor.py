@@ -6,8 +6,11 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Callable, Optional
 import threading
+import time
 from .pdf_merger import PDFMerger
+from .pikepdf_merger import PikePDFMerger
 from .date_extractor import DateExtractor
+from .ocr_processor import OCRProcessor
 
 
 class BatchProcessor:
@@ -20,6 +23,10 @@ class BatchProcessor:
         self.current_folder = None
         self.progress_callback: Optional[Callable] = None
         self.log_callback: Optional[Callable] = None
+        self.last_progress_update = 0
+        self.progress_update_interval = 0.1  # Update progress at most 10 times per second
+        self.total_input_size = 0
+        self.total_output_size = 0
 
     def set_progress_callback(self, callback: Callable):
         """Set callback for progress updates."""
@@ -34,10 +41,39 @@ class BatchProcessor:
         if self.log_callback:
             self.log_callback(message)
 
-    def _update_progress(self, current: int, total: int, message: str = ""):
-        """Update progress."""
-        if self.progress_callback:
-            self.progress_callback(current, total, message)
+    def _format_size(self, size_bytes: int) -> str:
+        """
+        Format file size in human-readable format.
+
+        Args:
+            size_bytes: Size in bytes
+
+        Returns:
+            Formatted string (e.g., "1.5 MB")
+        """
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} TB"
+
+    def _update_progress(self, current: int, total: int, message: str = "", force: bool = False):
+        """
+        Update progress with throttling to avoid UI flooding.
+
+        Args:
+            current: Current progress value
+            total: Total progress value
+            message: Progress message
+            force: Force update regardless of time interval
+        """
+        current_time = time.time()
+
+        # Only update if enough time has passed or force is True
+        if force or (current_time - self.last_progress_update) >= self.progress_update_interval:
+            if self.progress_callback:
+                self.progress_callback(current, total, message)
+            self.last_progress_update = current_time
 
     def validate_and_fix_path(self, base_path: str) -> Optional[str]:
         """
@@ -109,12 +145,14 @@ class BatchProcessor:
         pattern = r'.*_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.pdf$'
         return bool(re.match(pattern, filename, re.IGNORECASE))
 
-    def get_pdf_files_in_folder(self, folder_path: str) -> List[str]:
+    def get_pdf_files_in_folder(self, folder_path: str, recursive: bool = True) -> List[str]:
         """
         Get all PDF files in a folder, excluding previously joined PDFs.
+        Can optionally search recursively in subfolders.
 
         Args:
             folder_path: Path to the folder
+            recursive: If True, search subfolders recursively
 
         Returns:
             List of PDF file paths (excluding joined PDFs)
@@ -122,13 +160,26 @@ class BatchProcessor:
         pdf_files = []
         skipped_count = 0
         try:
-            for file in os.listdir(folder_path):
-                if file.lower().endswith('.pdf'):
-                    # Skip previously joined PDFs
-                    if self._is_joined_pdf(file):
-                        skipped_count += 1
-                        continue
-                    pdf_files.append(os.path.join(folder_path, file))
+            if recursive:
+                # Recursively walk through all subdirectories
+                for root, dirs, files in os.walk(folder_path):
+                    for file in files:
+                        if file.lower().endswith('.pdf'):
+                            # Skip previously joined PDFs
+                            if self._is_joined_pdf(file):
+                                skipped_count += 1
+                                continue
+                            pdf_files.append(os.path.join(root, file))
+            else:
+                # Only process files in the immediate folder
+                for file in os.listdir(folder_path):
+                    file_path = os.path.join(folder_path, file)
+                    if os.path.isfile(file_path) and file.lower().endswith('.pdf'):
+                        # Skip previously joined PDFs
+                        if self._is_joined_pdf(file):
+                            skipped_count += 1
+                            continue
+                        pdf_files.append(file_path)
 
             if skipped_count > 0:
                 self._log(f"  Skipped {skipped_count} previously joined PDF(s)")
@@ -137,18 +188,34 @@ class BatchProcessor:
 
         return pdf_files
 
-    def create_output_filename(self, folder_path: str) -> str:
+    def create_output_filename(self, folder_path: str, base_path: str) -> str:
         """
-        Create output filename from folder name and creation date.
-        Format: <folder_name>_<YYYY-MM-DD>_<HH-MM-SS>.pdf
+        Create output filename from folder name(s) and creation date.
+        If folder is nested, includes parent folder name.
+        Format: <parent_folder>_<folder_name>_<YYYY-MM-DD>_<HH-MM-SS>.pdf
 
         Args:
             folder_path: Path to the folder
+            base_path: Base directory path
 
         Returns:
             Output filename
         """
-        folder_name = os.path.basename(folder_path)
+        # Get relative path from base to current folder
+        try:
+            rel_path = os.path.relpath(folder_path, base_path)
+            path_parts = rel_path.split(os.sep)
+
+            # If nested, include parent folder name
+            if len(path_parts) > 1:
+                # Use parent and current folder names
+                folder_name = f"{path_parts[-2]}_{path_parts[-1]}"
+            else:
+                # Just use current folder name
+                folder_name = path_parts[-1]
+        except Exception:
+            # Fallback to just the folder name
+            folder_name = os.path.basename(folder_path)
 
         # Get folder creation time
         try:
@@ -187,24 +254,57 @@ class BatchProcessor:
         except Exception:
             return False
 
-    def process_folders(self, selected_folders: List[str], base_path: str, delete_source: bool = True, quality: str = "medium"):
+    def process_folders(
+        self,
+        selected_folders: List[str],
+        base_path: str,
+        delete_source: bool = True,
+        quality: str = "medium",
+        enable_ocr: bool = False,
+        ocr_language: str = "deu"
+    ):
         """
         Process selected folders and merge PDFs.
+
+        Workflow with OCR:
+        1. OCR on individual PDFs (kleinere Dateien, besser handhabbar)
+        2. Merge PDFs mit Kompression
+        3. OCR-Text bleibt erhalten
 
         Args:
             selected_folders: List of folder names to process
             base_path: Base directory path
             delete_source: Whether to delete source PDFs after successful merge (default: True)
-            quality: Image quality preset - "high", "medium", "low", or "original" (default: "medium")
+            quality: Image quality preset - "high", "medium", "low", "ultra-low", or "original" (default: "medium")
+            enable_ocr: Enable OCR processing before merge (default: False)
+            ocr_language: OCR language code - "deu", "eng", "fra", etc. (default: "deu")
         """
         self.is_running = True
         self.should_stop = False
+        self.total_input_size = 0
+        self.total_output_size = 0
 
         total_folders = len(selected_folders)
         deletion_status = "enabled" if delete_source else "disabled"
+        ocr_status = f"enabled ({ocr_language})" if enable_ocr else "disabled"
+
         self._log(f"Starting batch processing of {total_folders} folders...")
         self._log(f"Source file deletion: {deletion_status}")
         self._log(f"Image quality: {quality}")
+        self._log(f"OCR processing: {ocr_status}")
+
+        # Initialize OCR processor if needed
+        ocr_processor = None
+        if enable_ocr:
+            ocr_processor = OCRProcessor(language=ocr_language)
+            ocr_processor.set_log_callback(self._log)
+
+            # Check if OCR is available
+            if not ocr_processor.is_ocrmypdf_available():
+                self._log("⚠ WARNING: OCRmyPDF nicht verfügbar - OCR wird übersprungen")
+                self._log("  Installation: brew install ocrmypdf tesseract-lang")
+                enable_ocr = False
+                ocr_processor = None
 
         # Phase 1: Count all PDF files across all folders
         self._log(f"\nCounting PDF files in {total_folders} folders...")
@@ -267,16 +367,41 @@ class BatchProcessor:
             # Sort by date (newest first)
             sorted_files = DateExtractor.sort_files_by_date(pdf_files, newest_first=True)
 
+            # PHASE: OCR Processing (if enabled)
+            # Process individual PDFs before merge (kleinere Dateien, besser handhabbar)
+            if enable_ocr and ocr_processor:
+                self._log(f"  Running OCR on {len(sorted_files)} PDFs...")
+
+                ocr_success, ocr_failed, ocr_errors = ocr_processor.batch_process(
+                    sorted_files,
+                    optimize_level=0,  # No optimization during OCR (we'll compress during merge)
+                    skip_text=True,  # Skip pages that already have text
+                    inplace=True  # Replace original files with OCR versions
+                )
+
+                if ocr_success > 0:
+                    self._log(f"  ✓ OCR completed: {ocr_success} erfolg, {ocr_failed} fehler")
+
+                if ocr_failed > 0:
+                    self._log(f"  ⚠ OCR Fehler bei {ocr_failed} Datei(en)")
+                    # Continue processing - OCR failures don't stop the merge
+
             # Create output filename
-            output_filename = self.create_output_filename(folder_path)
+            output_filename = self.create_output_filename(folder_path, base_path)
             output_path = os.path.join(folder_path, output_filename)
 
             self._log(f"  Output: {output_filename}")
             self._log(f"  Merging PDFs (sorted by date, newest first)...")
 
+            # Calculate input file sizes
+            input_size = sum(os.path.getsize(f) for f in sorted_files if os.path.exists(f))
+            self.total_input_size += input_size
+
             # Merge PDFs with progress updates and quality setting
-            merger = PDFMerger(quality=quality)
-            success = merger.merge_pdfs(sorted_files, output_path)
+            # Use pikepdf for better image compression
+            # OCR text layer is preserved during merge
+            merger = PikePDFMerger(quality=quality)
+            success, error_message = merger.merge_pdfs(sorted_files, output_path)
             merger.close()
 
             # Update progress after merging files in this folder
@@ -285,7 +410,24 @@ class BatchProcessor:
                                 f"Processed {files_processed}/{total_files} files")
 
             if success and self.verify_pdf_file(output_path):
-                self._log(f"  ✓ Successfully merged {len(sorted_files)} PDFs")
+                # Calculate output file size
+                output_size = os.path.getsize(output_path)
+                self.total_output_size += output_size
+
+                # Calculate size difference
+                size_diff = input_size - output_size
+                size_percent = (size_diff / input_size * 100) if input_size > 0 else 0
+
+                if size_diff > 0:
+                    self._log(f"  ✓ Successfully merged {len(sorted_files)} PDFs (reduced by {self._format_size(size_diff)}, {size_percent:.1f}%)")
+                elif size_diff < 0:
+                    self._log(f"  ✓ Successfully merged {len(sorted_files)} PDFs (increased by {self._format_size(abs(size_diff))}, {abs(size_percent):.1f}%)")
+                else:
+                    self._log(f"  ✓ Successfully merged {len(sorted_files)} PDFs (no size change)")
+
+                # Show warning message if any files were skipped during merge
+                if error_message:
+                    self._log(f"  ⚠ Warnung: {error_message}")
 
                 # Delete source files if requested
                 if delete_source:
@@ -301,7 +443,10 @@ class BatchProcessor:
                 else:
                     self._log(f"  ℹ Source files retained ({len(sorted_files)} PDFs preserved)")
             else:
-                self._log(f"  ✗ Failed to merge PDFs in {folder_name}")
+                if error_message:
+                    self._log(f"  ✗ Failed to merge PDFs in {folder_name}: {error_message}")
+                else:
+                    self._log(f"  ✗ Failed to merge PDFs in {folder_name}")
                 # Delete failed output file if it exists
                 if os.path.exists(output_path):
                     try:
@@ -309,8 +454,26 @@ class BatchProcessor:
                     except Exception:
                         pass
 
-        self._update_progress(total_files, total_files, "Processing complete")
-        self._log(f"\nBatch processing completed!")
+        self._update_progress(total_files, total_files, "Processing complete", force=True)
+
+        # Log summary with file size information
+        self._log(f"\n{'='*60}")
+        self._log(f"Batch processing completed!")
+        self._log(f"{'='*60}")
+        if self.total_input_size > 0:
+            total_diff = self.total_input_size - self.total_output_size
+            total_percent = (total_diff / self.total_input_size * 100) if self.total_input_size > 0 else 0
+
+            self._log(f"Total input size:  {self._format_size(self.total_input_size)}")
+            self._log(f"Total output size: {self._format_size(self.total_output_size)}")
+
+            if total_diff > 0:
+                self._log(f"Total reduction:   {self._format_size(total_diff)} ({total_percent:.1f}%)")
+            elif total_diff < 0:
+                self._log(f"Total increase:    {self._format_size(abs(total_diff))} ({abs(total_percent):.1f}%)")
+            else:
+                self._log(f"No size change")
+
         self.is_running = False
 
     def pause(self):

@@ -64,13 +64,28 @@ def test_create_output_filename():
     """Test output filename generation."""
     processor = BatchProcessor()
     test_folder = "/test/path/My Test Folder"
+    base_path = "/test/path"
 
-    filename = processor.create_output_filename(test_folder)
+    filename = processor.create_output_filename(test_folder, base_path)
 
     # Check format: foldername_YYYY-MM-DD_HH-MM-SS.pdf
     assert filename.startswith("My Test Folder_")
     assert filename.endswith(".pdf")
     assert len(filename.split("_")) >= 3
+
+
+def test_create_output_filename_nested():
+    """Test output filename generation for nested folders."""
+    processor = BatchProcessor()
+    test_folder = "/test/path/Parent Folder/Child Folder"
+    base_path = "/test/path"
+
+    filename = processor.create_output_filename(test_folder, base_path)
+
+    # Check that parent folder name is included
+    assert "Parent Folder" in filename or "ParentFolder" in filename
+    assert "Child Folder" in filename or "ChildFolder" in filename
+    assert filename.endswith(".pdf")
 
 
 def test_verify_pdf_file_exists(temp_test_dir):

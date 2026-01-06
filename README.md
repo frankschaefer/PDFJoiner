@@ -2,18 +2,20 @@
 
 A professional Python desktop application for batch processing and merging PDF files from multiple folders. Features a modern GUI built with CustomTkinter.
 
-![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)
+![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 ## Features
 
 ### Batch Processing Mode (Default)
-- **Intelligent Folder Processing**: Select and process multiple folders simultaneously
+- **Intelligent Folder Processing**: Select and process multiple folders simultaneously with subfolder support
 - **Smart Date Extraction**: Automatically extracts dates from PDF filenames
 - **Automatic Sorting**: Orders PDFs by date (newest first) before merging
+- **Advanced Image Compression**: Real JPEG compression with 4 quality presets (40-80% file size reduction)
+- **OCR Integration**: Add searchable text layer to scanned PDFs for LLM access
 - **Safe File Management**: Verifies merge success before deleting source files
-- **Real-time Progress Tracking**: Visual progress bar with time estimates
+- **Real-time Progress Tracking**: Visual progress bar with time estimates and file size reduction display
 - **Process Control**: Start, Pause/Resume, and Stop functionality
 - **Professional Output Naming**: `<folder_name>_<YYYY-MM-DD>_<HH-MM-SS>.pdf`
 
@@ -108,18 +110,28 @@ PDF-Joiner/
 ├── start.bat                    # Windows launcher
 ├── start.sh                     # macOS/Linux launcher
 ├── requirements.txt             # Python dependencies
+├── README.md                    # This file
 ├── CLAUDE.md                    # Development documentation
+├── HELP.md                      # User help guide
+├── ERROR_HANDLING.md            # Error documentation
+├── OCR_INTEGRATION.md           # OCR integration guide
 ├── src/
 │   └── pdf_joiner/
 │       ├── __init__.py         # Version metadata
-│       ├── batch_gui.py        # Batch processing UI
-│       ├── batch_processor.py  # Batch processing logic
+│       ├── batch_gui.py        # Batch processing UI with OCR controls
+│       ├── batch_processor.py  # Batch processing logic with OCR
 │       ├── date_extractor.py   # Date parsing utilities
 │       ├── gui.py              # Simple mode UI
-│       └── pdf_merger.py       # Core PDF merging
+│       ├── pdf_merger.py       # Legacy PyPDF2 merging
+│       ├── pikepdf_merger.py   # Advanced pikepdf merging with compression
+│       └── ocr_processor.py    # OCR text layer integration
 ├── tests/
 │   ├── __init__.py
-│   └── test_pdf_merger.py
+│   ├── test_pdf_merger.py
+│   ├── test_batch_processor.py
+│   ├── test_multiple_folders.py
+│   ├── test_quality_settings.py
+│   └── test_pikepdf_compression.py
 └── assets/                      # UI resources
 ```
 
@@ -138,10 +150,13 @@ python -m pytest tests/test_pdf_merger.py
 
 ### Dependencies
 - **customtkinter** - Modern UI framework
-- **PyPDF2** - PDF manipulation
+- **pikepdf** - Advanced PDF manipulation with real image compression
+- **PyPDF2** - Legacy PDF support
 - **pillow** - Image handling
 - **python-dateutil** - Flexible date parsing
 - **pytest** - Testing framework
+- **reportlab** - PDF generation for tests
+- **ocrmypdf** (optional) - OCR text layer integration
 
 ## Configuration
 
@@ -153,6 +168,87 @@ self.base_path = "/your/default/path"
 Or use the "📁 Select Start Folder" button to choose a different directory at runtime.
 
 ## Version History
+
+### v1.3.0 (2026-01-06) - OCR Integration
+- **OCR Integration for LLM Access**: Add searchable text layer to scanned PDFs
+  - New OCRProcessor class wrapping OCRmyPDF functionality
+  - GUI checkbox: "🔍 Add OCR text layer (macht PDFs durchsuchbar für LLMs)"
+  - Language selection dropdown (German, English, French, Italian, Spanish, Portuguese, Dutch)
+  - Optimal workflow: OCR individual files → Compress → Merge (avoids processing huge merged files)
+  - Automatic skip of pages that already contain text (`--skip-text`)
+  - Graceful degradation if OCRmyPDF not installed
+- **Enhanced Error Handling**: Detailed error messages with automatic file skipping
+  - Show full file path, size, and problem type for all errors
+  - Automatic skipping of empty files (0 bytes) and tiny files (<100 bytes)
+  - Specific error messages for corrupt PDFs, password-protected PDFs, damaged PDFs
+  - Continue processing other files when individual files fail
+  - Comprehensive ERROR_HANDLING.md documentation
+- **Documentation**: Complete OCR_INTEGRATION.md guide with installation and usage
+
+### v1.2.1 (2026-01-06) - Ultra Compression & Error Handling
+- **Ultra-Low Quality Preset**: Aggressive downsampling option (50% JPEG, 100 DPI)
+  - Achieves 70-90% file size reduction for image-heavy PDFs
+  - Useful for large archives and internal documents
+  - Added to quality dropdown with clear description
+- **Enhanced Error Messages**: Improved error reporting in pikepdf_merger.py
+  - Full file path shown in all error messages
+  - Detailed error categorization (corrupt structure, password-protected, damaged)
+  - File size information included in error reports
+  - Helpful tips for fixing corrupt PDFs (Adobe/Preview repair, Ghostscript)
+- **File Validation**: Pre-merge validation of all input files
+  - Check for 0-byte files (skip automatically)
+  - Check for files <100 bytes (likely corrupt, skip automatically)
+  - Detailed skipped file summary at end of processing
+
+### v1.2.0 (2026-01-06) - Real Image Compression
+- **pikepdf Integration**: Migrated from PyPDF2 to pikepdf for real compression
+  - Actual JPEG compression of images within PDFs
+  - DPI downsampling (300/200/150/100 DPI based on quality)
+  - RGB color space conversion for compatibility
+  - Object stream compression for smaller file sizes
+- **Quality Presets**: Professional compression settings
+  - High (85% JPEG, 300 DPI): 20-40% reduction, best for archival
+  - Medium (75% JPEG, 200 DPI): 40-60% reduction, balanced (default)
+  - Low (60% JPEG, 150 DPI): 60-80% reduction, maximum compression
+  - Original: No compression, preserves exact input quality
+- **Compression Results**: Actual file size reduction (previously files were increasing)
+  - Typical reduction: 40-60% for medium quality
+  - Smart image handling: skips tiny images, converts transparency
+- **Tests**: Comprehensive test suite for compression verification
+
+### v1.1.0 (2026-01-06) - Multi-Folder & Compression
+- **Recursive Subfolder Processing**: Process entire folder trees automatically
+  - Uses os.walk() for deep folder traversal
+  - Parent folder name included in output filename (ParentFolder_ChildFolder)
+  - Maintains folder hierarchy in merged PDF naming
+- **Multiple Folder Processing Fix**: All selected folders now process correctly
+  - Fixed issue where only first folder was processed
+  - Progress tracking across all selected folders
+- **File Size Tracking**: Real-time file size reduction monitoring
+  - New progress bar showing percentage reduction
+  - Detailed size comparison: input vs output in MB/GB
+  - Color-coded display (green for reduction, red for increase)
+  - Total size tracking across all folders
+- **Enhanced Logging**: Detailed size reduction information per folder
+  - Shows exact MB/GB reduction
+  - Displays percentage reduction
+  - Warning if files increase in size
+
+### v1.0.7 (2026-01-06) - Progress & Error Fixes
+- **Button State Management**: Fixed button states after processing errors
+  - Stop button now properly deactivates after completion
+  - Exit button properly activates after completion
+  - Consistent state regardless of success/failure
+- **Progress Throttling**: Smooth progress bar updates
+  - Throttled to max 10 updates per second
+  - Fixed jumping from 0 to final value instantly
+  - Better visual feedback during processing
+- **Error Handling**: Improved PyPDF2 error handling
+  - Graceful handling of "Image data not rectangular"
+  - Fixed "cannot write mode PA as PNG" errors
+  - Handled "Illegal character in Name Object" warnings
+  - Fixed "'NullObject' object has no attribute '_clone'" crashes
+- **Stability**: More robust PDF processing with better error recovery
 
 ### v1.0.6 (2026-01-05)
 - Added comprehensive Help documentation (HELP.md)

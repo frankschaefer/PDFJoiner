@@ -2,8 +2,9 @@
 
 from PyPDF2 import PdfReader, PdfWriter
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 import io
+import warnings
 from PIL import Image
 
 
@@ -95,7 +96,7 @@ class PDFMerger:
             # Silently return original data if compression fails
             return image_data
 
-    def merge_pdfs(self, pdf_files: List[str], output_path: str) -> bool:
+    def merge_pdfs(self, pdf_files: List[str], output_path: str) -> Tuple[bool, str]:
         """
         Merge multiple PDF files into a single PDF with optional image compression.
 
@@ -104,33 +105,52 @@ class PDFMerger:
             output_path: Path where the merged PDF will be saved
 
         Returns:
-            True if successful, False otherwise
+            Tuple of (success: bool, error_message: str)
         """
         try:
             writer = PdfWriter()
 
+            # Suppress PyPDF2 warnings about illegal characters
+            warnings.filterwarnings('ignore', message='.*Illegal character.*')
+
             for pdf_file in pdf_files:
                 if not Path(pdf_file).exists():
-                    raise FileNotFoundError(f"File not found: {pdf_file}")
+                    error_msg = f"File not found: {Path(pdf_file).name}"
+                    print(f"Error merging PDFs: {error_msg}")
+                    return False, error_msg
 
-                reader = PdfReader(pdf_file)
+                try:
+                    reader = PdfReader(pdf_file, strict=False)
 
-                # Add all pages from this PDF
-                for page in reader.pages:
-                    # Note: Image compression is disabled for now due to PyPDF2 compatibility issues
-                    # The compression feature will be re-enabled in a future version with better
-                    # PyPDF2 integration
-                    writer.add_page(page)
+                    # Add all pages from this PDF
+                    for page in reader.pages:
+                        # Note: Image compression is disabled for now due to PyPDF2 compatibility issues
+                        # The compression feature will be re-enabled in a future version with better
+                        # PyPDF2 integration
+                        writer.add_page(page)
 
-            # Write the merged PDF
+                except Exception as e:
+                    error_msg = f"Corrupt or invalid PDF '{Path(pdf_file).name}': {str(e)[:100]}"
+                    print(f"Error merging PDFs: {error_msg}")
+                    return False, error_msg
+
+            # Write the merged PDF with compression if not original quality
             with open(output_path, 'wb') as output_file:
+                if self.quality != "original":
+                    # Use PyPDF2's built-in compression
+                    try:
+                        writer.compress_content_streams()
+                    except Exception:
+                        # If compression fails, continue without it
+                        pass
                 writer.write(output_file)
 
-            return True
+            return True, ""
 
         except Exception as e:
-            print(f"Error merging PDFs: {e}")
-            return False
+            error_msg = f"{str(e)[:100]}"
+            print(f"Error merging PDFs: {error_msg}")
+            return False, error_msg
 
     def close(self):
         """Clean up resources."""

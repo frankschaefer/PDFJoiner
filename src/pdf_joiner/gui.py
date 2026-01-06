@@ -4,7 +4,7 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from pathlib import Path
 from typing import List
-from .pdf_merger import PDFMerger
+from .pikepdf_merger import PikePDFMerger
 
 
 ctk.set_appearance_mode("system")
@@ -21,7 +21,7 @@ class PDFJoinerApp(ctk.CTk):
         self.geometry("800x600")
 
         self.pdf_files: List[str] = []
-        self.merger = PDFMerger()
+        self.merger = PikePDFMerger(quality="medium")
 
         self._setup_ui()
 
@@ -134,7 +134,7 @@ class PDFJoinerApp(ctk.CTk):
             return
 
         # Perform merge
-        success = self.merger.merge_pdfs(self.pdf_files, output_file)
+        success, error_message = self.merger.merge_pdfs(self.pdf_files, output_file)
 
         if success:
             messagebox.showinfo(
@@ -143,9 +143,10 @@ class PDFJoinerApp(ctk.CTk):
             )
             self._clear_files()
         else:
+            error_text = f"Failed to merge PDFs.\n\n{error_message}" if error_message else "Failed to merge PDFs. Please check the files and try again."
             messagebox.showerror(
                 "Error",
-                "Failed to merge PDFs. Please check the files and try again."
+                error_text
             )
 
     def on_closing(self):

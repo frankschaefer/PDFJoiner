@@ -183,8 +183,8 @@ class BatchPDFJoinerApp(ctk.CTk):
         self.quality_dropdown = ctk.CTkOptionMenu(
             quality_row,
             variable=self.quality_var,
-            values=["high", "medium", "low", "original"],
-            width=180,
+            values=["high", "medium", "low", "ultra-low", "original"],
+            width=200,
             font=ctk.CTkFont(size=12),
             dropdown_font=ctk.CTkFont(size=11)
         )
@@ -201,6 +201,48 @@ class BatchPDFJoinerApp(ctk.CTk):
 
         # Update description when quality changes
         self.quality_var.trace_add("write", self._update_quality_description)
+
+        # OCR options
+        ocr_row = ctk.CTkFrame(options_frame, fg_color="transparent")
+        ocr_row.grid(row=2, column=0, padx=0, pady=(5, 0), sticky="w")
+
+        self.ocr_var = ctk.BooleanVar(value=False)
+        self.ocr_checkbox = ctk.CTkCheckBox(
+            ocr_row,
+            text="🔍 Add OCR text layer (macht PDFs durchsuchbar für LLMs)",
+            variable=self.ocr_var,
+            font=ctk.CTkFont(size=12),
+            text_color=("gray10", "gray90"),
+            command=self._update_ocr_state
+        )
+        self.ocr_checkbox.grid(row=0, column=0, padx=(0, 10), sticky="w")
+
+        # OCR Language selection
+        self.ocr_language_var = ctk.StringVar(value="deu")
+        self.ocr_language_dropdown = ctk.CTkOptionMenu(
+            ocr_row,
+            variable=self.ocr_language_var,
+            values=["deu", "eng", "fra", "ita", "spa", "por", "nld"],
+            width=100,
+            font=ctk.CTkFont(size=11),
+            dropdown_font=ctk.CTkFont(size=10)
+        )
+        self.ocr_language_dropdown.grid(row=0, column=1, padx=0, sticky="w")
+
+        # OCR info label
+        self.ocr_info_label = ctk.CTkLabel(
+            ocr_row,
+            text="(Deutsch)",
+            font=ctk.CTkFont(size=10),
+            text_color="gray"
+        )
+        self.ocr_info_label.grid(row=0, column=2, padx=(10, 0), sticky="w")
+
+        # Update OCR info when language changes
+        self.ocr_language_var.trace_add("write", self._update_ocr_language_description)
+
+        # Initially disable OCR language dropdown
+        self.ocr_language_dropdown.configure(state="disabled")
 
     def _create_log_frame(self):
         """Create log output frame."""
@@ -234,8 +276,21 @@ class BatchPDFJoinerApp(ctk.CTk):
 
         # Progress bar
         self.progress_bar = ctk.CTkProgressBar(progress_frame)
-        self.progress_bar.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+        self.progress_bar.grid(row=1, column=0, padx=10, pady=(0, 5), sticky="ew")
         self.progress_bar.set(0)
+
+        # File size reduction label and bar
+        self.size_label = ctk.CTkLabel(
+            progress_frame,
+            text="File size change: --",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        )
+        self.size_label.grid(row=2, column=0, padx=10, pady=(5, 2), sticky="w")
+
+        self.size_bar = ctk.CTkProgressBar(progress_frame, height=8)
+        self.size_bar.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="ew")
+        self.size_bar.set(0)
 
     def _create_control_buttons(self):
         """Create control buttons."""
@@ -387,12 +442,50 @@ class BatchPDFJoinerApp(ctk.CTk):
         """Update quality description label based on selected quality."""
         quality = self.quality_var.get()
         descriptions = {
-            "high": "(High Quality - larger file size)",
-            "medium": "(Medium Quality - balanced)",
-            "low": "(Low Quality - smaller file size)",
+            "high": "(High Quality - 85% JPEG, 300 DPI)",
+            "medium": "(Medium Quality - 75% JPEG, 200 DPI)",
+            "low": "(Low Quality - 60% JPEG, 150 DPI)",
+            "ultra-low": "(Ultra-Low Quality - 50% JPEG, 100 DPI - aggressive!)",
             "original": "(Original - no compression)"
         }
         self.quality_desc_label.configure(text=descriptions.get(quality, ""))
+
+    def _update_ocr_state(self):
+        """Enable/disable OCR language dropdown based on checkbox."""
+        if self.ocr_var.get():
+            self.ocr_language_dropdown.configure(state="normal")
+        else:
+            self.ocr_language_dropdown.configure(state="disabled")
+
+    def _update_ocr_language_description(self, *args):
+        """Update OCR language description label."""
+        language = self.ocr_language_var.get()
+        descriptions = {
+            "deu": "(Deutsch)",
+            "eng": "(English)",
+            "fra": "(Français)",
+            "ita": "(Italiano)",
+            "spa": "(Español)",
+            "por": "(Português)",
+            "nld": "(Nederlands)"
+        }
+        self.ocr_info_label.configure(text=descriptions.get(language, ""))
+
+    def _format_size(self, size_bytes: int) -> str:
+        """
+        Format file size in human-readable format.
+
+        Args:
+            size_bytes: Size in bytes
+
+        Returns:
+            Formatted string (e.g., "1.5 MB")
+        """
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} TB"
 
     def _format_markdown_to_text(self, markdown_text: str) -> str:
         """
@@ -547,6 +640,8 @@ class BatchPDFJoinerApp(ctk.CTk):
 
         # Reset progress
         self.progress_bar.set(0)
+        self.size_bar.set(0)
+        self.size_label.configure(text="File size change: --", text_color="gray")
         self.start_time = time.time()
 
         # Update button states to processing
@@ -558,14 +653,16 @@ class BatchPDFJoinerApp(ctk.CTk):
                 checkbox.configure(state="disabled")
         self.delete_checkbox.configure(state="disabled")
 
-        # Get deletion preference and quality setting
+        # Get deletion preference, quality setting, and OCR settings
         delete_source = self.delete_source_var.get()
         quality = self.quality_var.get()
+        enable_ocr = self.ocr_var.get()
+        ocr_language = self.ocr_language_var.get()
 
         # Start processing in thread
         self.processing_thread = threading.Thread(
             target=self.processor.process_folders,
-            args=(self.selected_folders, self.base_path, delete_source, quality),
+            args=(self.selected_folders, self.base_path, delete_source, quality, enable_ocr, ocr_language),
             daemon=True
         )
         self.processing_thread.start()
@@ -598,6 +695,38 @@ class BatchPDFJoinerApp(ctk.CTk):
             self.progress_bar.set(progress)
             self.progress_label.configure(text=message)
 
+            # Update size reduction info
+            if hasattr(self.processor, 'total_input_size') and self.processor.total_input_size > 0:
+                input_size = self.processor.total_input_size
+                output_size = self.processor.total_output_size
+                size_diff = input_size - output_size
+                size_percent = (size_diff / input_size * 100) if input_size > 0 else 0
+
+                # Format size difference
+                size_diff_str = self._format_size(abs(size_diff))
+
+                if size_diff > 0:
+                    # Reduction
+                    self.size_label.configure(
+                        text=f"File size reduction: {size_diff_str} ({size_percent:.1f}%)",
+                        text_color="green"
+                    )
+                    # Show reduction as positive progress (green bar)
+                    self.size_bar.set(min(abs(size_percent) / 100, 1.0))
+                    self.size_bar.configure(progress_color="green")
+                elif size_diff < 0:
+                    # Increase
+                    self.size_label.configure(
+                        text=f"File size increase: {size_diff_str} ({abs(size_percent):.1f}%)",
+                        text_color="orange"
+                    )
+                    # Show increase as progress (orange bar)
+                    self.size_bar.set(min(abs(size_percent) / 100, 1.0))
+                    self.size_bar.configure(progress_color="orange")
+                else:
+                    self.size_label.configure(text="No size change", text_color="gray")
+                    self.size_bar.set(0)
+
         self.after(0, update)
 
     def _on_log_message(self, message: str):
@@ -609,8 +738,8 @@ class BatchPDFJoinerApp(ctk.CTk):
         self.log_text.insert("end", message + "\n")
         self.log_text.see("end")
 
-        # Check if processing is complete
-        if not self.processor.is_running and self.processing_thread is not None:
+        # Check if processing is complete by looking for completion message
+        if "Batch processing completed!" in message and self.processing_thread is not None:
             self._on_processing_complete()
 
     def _update_time(self):
