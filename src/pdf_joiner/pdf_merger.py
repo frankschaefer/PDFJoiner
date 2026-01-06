@@ -49,20 +49,41 @@ class PDFMerger:
             # Open image from bytes
             img = Image.open(io.BytesIO(image_data))
 
-            # Convert to RGB if necessary
-            if img.mode in ('RGBA', 'LA', 'P'):
+            # Verify image has valid dimensions
+            if img.size[0] <= 0 or img.size[1] <= 0:
+                return image_data
+
+            # Convert problematic modes to RGB
+            if img.mode in ('RGBA', 'LA', 'P', 'PA', 'L', '1'):
+                # Create white background for transparency
                 background = Image.new('RGB', img.size, (255, 255, 255))
+
+                # Handle palette mode
                 if img.mode == 'P':
                     img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
-                img = background
+                # Handle grayscale with alpha
+                elif img.mode == 'PA':
+                    img = img.convert('RGBA')
+                # Handle single channel modes
+                elif img.mode in ('L', '1'):
+                    img = img.convert('RGB')
+
+                # Paste with transparency mask if applicable
+                if img.mode in ('RGBA', 'LA'):
+                    try:
+                        background.paste(img, mask=img.split()[-1])
+                        img = background
+                    except Exception:
+                        # If masking fails, just convert directly
+                        img = img.convert('RGB')
             elif img.mode != 'RGB':
+                # Convert any other mode to RGB
                 img = img.convert('RGB')
 
             # Resize if scale factor is set
             if self.scale_factor and self.scale_factor < 1.0:
-                new_width = int(width * self.scale_factor)
-                new_height = int(height * self.scale_factor)
+                new_width = max(1, int(width * self.scale_factor))
+                new_height = max(1, int(height * self.scale_factor))
                 img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
             # Compress to JPEG
@@ -71,7 +92,7 @@ class PDFMerger:
             return output.getvalue()
 
         except Exception as e:
-            print(f"Warning: Could not compress image: {e}")
+            # Silently return original data if compression fails
             return image_data
 
     def merge_pdfs(self, pdf_files: List[str], output_path: str) -> bool:
@@ -96,26 +117,9 @@ class PDFMerger:
 
                 # Add all pages from this PDF
                 for page in reader.pages:
-                    # Compress images in page if quality setting is not "original"
-                    if self.jpeg_quality is not None and hasattr(page, 'images'):
-                        try:
-                            for image in page.images:
-                                # Get image data
-                                image_data = image.data
-                                if hasattr(image, 'width') and hasattr(image, 'height'):
-                                    # Compress the image
-                                    compressed_data = self._compress_image(
-                                        image_data,
-                                        image.width,
-                                        image.height
-                                    )
-                                    # Replace image data
-                                    if len(compressed_data) < len(image_data):
-                                        image._data = compressed_data
-                        except Exception as e:
-                            # If compression fails, continue with original page
-                            print(f"Warning: Could not compress images in page: {e}")
-
+                    # Note: Image compression is disabled for now due to PyPDF2 compatibility issues
+                    # The compression feature will be re-enabled in a future version with better
+                    # PyPDF2 integration
                     writer.add_page(page)
 
             # Write the merged PDF

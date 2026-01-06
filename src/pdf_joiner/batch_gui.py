@@ -394,9 +394,65 @@ class BatchPDFJoinerApp(ctk.CTk):
         }
         self.quality_desc_label.configure(text=descriptions.get(quality, ""))
 
+    def _format_markdown_to_text(self, markdown_text: str) -> str:
+        """
+        Convert markdown to formatted plain text for display.
+
+        Args:
+            markdown_text: Markdown formatted text
+
+        Returns:
+            Plain text with basic formatting preserved
+        """
+        lines = markdown_text.split('\n')
+        formatted_lines = []
+        in_code_block = False
+
+        for line in lines:
+            # Handle code blocks
+            if line.strip().startswith('```'):
+                in_code_block = not in_code_block
+                continue
+
+            if in_code_block:
+                formatted_lines.append(f"    {line}")
+                continue
+
+            # Handle headers
+            if line.startswith('# '):
+                formatted_lines.append('')
+                formatted_lines.append('═' * 70)
+                formatted_lines.append(line[2:].upper())
+                formatted_lines.append('═' * 70)
+            elif line.startswith('## '):
+                formatted_lines.append('')
+                formatted_lines.append('─' * 70)
+                formatted_lines.append(line[3:])
+                formatted_lines.append('─' * 70)
+            elif line.startswith('### '):
+                formatted_lines.append('')
+                formatted_lines.append(f"▸ {line[4:]}")
+                formatted_lines.append('')
+            # Handle horizontal rules
+            elif line.strip() == '---':
+                formatted_lines.append('')
+                formatted_lines.append('━' * 70)
+                formatted_lines.append('')
+            # Handle lists
+            elif line.strip().startswith('- '):
+                formatted_lines.append(f"  • {line.strip()[2:]}")
+            elif line.strip() and line.strip()[0].isdigit() and '. ' in line:
+                formatted_lines.append(f"  {line.strip()}")
+            # Handle bold/emphasis (simple replacement)
+            else:
+                # Remove markdown formatting
+                line = line.replace('**', '').replace('*', '').replace('`', '')
+                formatted_lines.append(line)
+
+        return '\n'.join(formatted_lines)
+
     def _show_help(self):
         """Display help documentation in a new window."""
-        import webbrowser
         import os
 
         # Get path to HELP.md
@@ -405,7 +461,7 @@ class BatchPDFJoinerApp(ctk.CTk):
         # Create help window
         help_window = ctk.CTkToplevel(self)
         help_window.title("PDF Joiner - Help")
-        help_window.geometry("800x600")
+        help_window.geometry("900x700")
 
         # Make window modal
         help_window.transient(self)
@@ -417,7 +473,7 @@ class BatchPDFJoinerApp(ctk.CTk):
         help_frame.grid_rowconfigure(0, weight=1)
         help_frame.grid_columnconfigure(0, weight=1)
 
-        help_text = ctk.CTkTextbox(help_frame, wrap="word", font=ctk.CTkFont(size=12))
+        help_text = ctk.CTkTextbox(help_frame, wrap="word", font=ctk.CTkFont(family="Courier", size=11))
         help_text.grid(row=0, column=0, sticky="nsew")
 
         # Load help content
@@ -425,7 +481,9 @@ class BatchPDFJoinerApp(ctk.CTk):
             if os.path.exists(help_file):
                 with open(help_file, 'r', encoding='utf-8') as f:
                     content = f.read()
-                help_text.insert("1.0", content)
+                # Convert markdown to formatted text
+                formatted_content = self._format_markdown_to_text(content)
+                help_text.insert("1.0", formatted_content)
             else:
                 help_text.insert("1.0", "Help file not found. Please see README.md for documentation.")
         except Exception as e:
