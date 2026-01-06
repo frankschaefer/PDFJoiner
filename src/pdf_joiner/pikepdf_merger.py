@@ -44,11 +44,24 @@ class PikePDFMerger:
             return  # Original quality, no compression
 
         try:
-            # Get all images in the page
-            for image_key in page.images.keys():
+            # Check if page has resources with images
+            if '/Resources' not in page or '/XObject' not in page.Resources:
+                return
+
+            xobjects = page.Resources.XObject
+
+            # Iterate over all XObjects
+            for xobj_name in list(xobjects.keys()):
                 try:
-                    raw_image = page.images[image_key]
-                    pil_image = raw_image.as_pil_image()
+                    xobj = xobjects[xobj_name]
+
+                    # Check if this is an image
+                    if '/Subtype' not in xobj or xobj.Subtype != '/Image':
+                        continue
+
+                    # Convert to PdfImage and then PIL
+                    pdf_image = pikepdf.PdfImage(xobj)
+                    pil_image = pdf_image.as_pil_image()
 
                     # Skip if image is already small
                     if pil_image.width < 100 or pil_image.height < 100:
@@ -81,15 +94,20 @@ class PikePDFMerger:
                     compressed = io.BytesIO()
                     pil_image.save(compressed, format='JPEG', quality=self.jpeg_quality, optimize=True)
                     compressed.seek(0)
+                    compressed_bytes = compressed.read()
 
-                    # Replace image in PDF
-                    compressed_image = pikepdf.PdfImage(
-                        compressed.read(),
-                        pikepdf.Name.DCTDecode  # JPEG compression
-                    )
+                    # Create new image object with compressed data
+                    new_image = pikepdf.Stream(pdf, compressed_bytes)
+                    new_image.Type = pikepdf.Name.XObject
+                    new_image.Subtype = pikepdf.Name.Image
+                    new_image.Width = pil_image.width
+                    new_image.Height = pil_image.height
+                    new_image.ColorSpace = pikepdf.Name.DeviceRGB
+                    new_image.BitsPerComponent = 8
+                    new_image.Filter = pikepdf.Name.DCTDecode
 
-                    # Update the image in the page
-                    page.images[image_key] = compressed_image
+                    # Replace the image in the page resources
+                    xobjects[xobj_name] = new_image
 
                 except Exception as e:
                     # Skip problematic images
